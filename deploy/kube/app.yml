@@ -1,0 +1,78 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: fhirlab
+  name: fhirlab-app
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: fhirlab-app
+  template:
+    metadata:
+      labels:
+        app: fhirlab-app
+    spec:
+      containers:
+      - name: app
+        image: fhirlab:latest
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: api-port
+          initialDelaySeconds: 5
+          periodSeconds: 10
+        env:
+        - name: FHIRLAB_HOST
+          value: "0.0.0.0"
+        - name: FHIRLAB_WORKERS_COUNT
+          value: "10"
+        - name: FHIRLAB_DB_HOST
+          value: "fhirlab-db-service"
+        - name: FHIRLAB_REDIS_HOST
+          value: "fhirlab-redis-service"
+        resources:
+          limits:
+            memory: "200Mi"
+            cpu: "100m"
+        ports:
+        - containerPort: 8000
+          name: api-port
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: fhirlab
+  name: fhirlab-app-service
+spec:
+  selector:
+    app: fhirlab-app
+  ports:
+  - protocol: TCP
+    port: 80
+    targetPort: api-port
+    name: api-port
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: fhirlab-app
+  namespace: fhirlab
+  labels:
+    name: fhirlab-app
+spec:
+  rules:
+  - host: fhirlab.local
+    http:
+      paths:
+      - pathType: Prefix
+        path: "/"
+        backend:
+          service:
+            name: fhirlab-app-service
+            port:
+              name: api-port
+
+---

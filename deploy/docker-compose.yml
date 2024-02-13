@@ -1,0 +1,73 @@
+version: '3.9'
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: ./deploy/Dockerfile
+      target: prod
+    image: fhirlab:${FHIRLAB_VERSION:-latest}
+    restart: always
+    env_file:
+    - .env
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      FHIRLAB_HOST: 0.0.0.0
+      FHIRLAB_DB_HOST: fhirlab-db
+      FHIRLAB_DB_PORT: 5432
+      FHIRLAB_DB_USER: fhirlab
+      FHIRLAB_DB_PASS: fhirlab
+      FHIRLAB_DB_BASE: fhirlab
+      FHIRLAB_REDIS_HOST: fhirlab-redis
+
+  db:
+    image: postgres:13.8-bullseye
+    hostname: fhirlab-db
+    environment:
+      POSTGRES_PASSWORD: "fhirlab"
+      POSTGRES_USER: "fhirlab"
+      POSTGRES_DB: "fhirlab"
+    volumes:
+    - fhirlab-db-data:/var/lib/postgresql/data
+    restart: always
+    healthcheck:
+      test: pg_isready -U fhirlab
+      interval: 2s
+      timeout: 3s
+      retries: 40
+
+  migrator:
+    image: fhirlab:${FHIRLAB_VERSION:-latest}
+    restart: "no"
+    command: alembic upgrade head
+    environment:
+      FHIRLAB_DB_HOST: fhirlab-db
+      FHIRLAB_DB_PORT: 5432
+      FHIRLAB_DB_USER: fhirlab
+      FHIRLAB_DB_PASS: fhirlab
+      FHIRLAB_DB_BASE: fhirlab
+    depends_on:
+      db:
+        condition: service_healthy
+
+  redis:
+    image: bitnami/redis:6.2.5
+    hostname: "fhirlab-redis"
+    restart: always
+    environment:
+      ALLOW_EMPTY_PASSWORD: "yes"
+    healthcheck:
+      test: redis-cli ping
+      interval: 1s
+      timeout: 3s
+      retries: 50
+
+
+
+volumes:
+  fhirlab-db-data:
+    name: fhirlab-db-data

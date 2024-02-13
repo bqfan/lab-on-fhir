@@ -1,0 +1,74 @@
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  namespace: fhirlab
+  name: fhirlab-db
+spec:
+  selector:
+    matchLabels:
+      app: fhirlab-db
+  template:
+    metadata:
+      labels:
+        app: fhirlab-db
+    spec:
+      containers:
+      - name: database
+        image: postgres:13.8-bullseye
+        resources:
+          limits:
+            memory: "300Mi"
+            cpu: "200m"
+        env:
+        - name: POSTGRES_PASSWORD
+          value: "fhirlab"
+        - name: POSTGRES_USER
+          value: "fhirlab"
+        - name: POSTGRES_DB
+          value: "fhirlab"
+        ports:
+        - containerPort: 5432
+---
+apiVersion: v1
+kind: Service
+metadata:
+  namespace: fhirlab
+  name: "fhirlab-db-service"
+spec:
+  selector:
+    app: fhirlab-db
+  ports:
+  - port: 5432
+    targetPort: 5432
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  namespace: fhirlab
+  name: fhirlab-migrator
+spec:
+  ttlSecondsAfterFinished: 100
+  template:
+    spec:
+      containers:
+      - name: migrator
+        image: fhirlab:latest
+        command:
+        - "alembic"
+        - "upgrade"
+        - "head"
+        resources:
+          limits:
+            memory: "200Mi"
+            cpu: "250m"
+        env:
+        - name: "FHIRLAB_DB_HOST"
+          value: "fhirlab-db-service"
+      initContainers:
+      - name: wait-for-db
+        image: toschneck/wait-for-it:latest
+        command: ["./wait-for-it.sh", "-t", "60", "fhirlab-db-service:5432"]
+      restartPolicy: Never
+
+---
