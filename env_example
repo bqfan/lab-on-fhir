@@ -1,0 +1,2 @@
+FHIRLAB_RELOAD=True
+FHIRLAB_DB_HOST=localhost
